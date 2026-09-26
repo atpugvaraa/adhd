@@ -1,0 +1,14 @@
+{
+  "name": "adhd",
+  "description": "aarav, don't hesitate. do your work",
+  "version": "1.0",
+  "manifest_version": 3,
+  "permissions": ["tabs"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "index.html",
+    "default_icon": "adhd.png"
+  }
+}

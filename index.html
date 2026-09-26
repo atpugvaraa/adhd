@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Breathe</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 3rem 2rem;
+      background: #0d0d0d;
+      color: #e5e5e5;
+      font-family: monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 85vh;
+    }
+    .wrapper {
+      width: 100%;
+      max-width: 680px;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    .callout {
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+    .url-highlight {
+      color: #ff6b6b;
+      word-break: break-all;
+    }
+    .reminder {
+      color: #888;
+    }
+    textarea {
+      flex: 1;
+      background: #141414;
+      color: #f1f1f1;
+      border: 1px solid #2a2a2a;
+      padding: 1.25rem;
+      font-family: inherit;
+      font-size: 1.05rem;
+      line-height: 1.6;
+      resize: none;
+      outline: none;
+    }
+    textarea:focus {
+      border-color: #444;
+    }
+    .footer {
+      margin-top: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #777;
+      font-size: 0.85rem;
+    }
+    button {
+      background: #222;
+      color: #eee;
+      border: 1px solid #3a3a3a;
+      padding: 0.6rem 1.2rem;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #2d2d2d;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="callout">
+      <div>you just tried to open <span id="blocked-target" class="url-highlight">that site</span> right now!</div>
+      <div class="reminder">trust me aarav, you don't have to do that.</div>
+      <div class="reminder">you're much happier without it.</div>
+    </div>
+
+    <textarea id="note" placeholder="Jot down what's on your mind... (Ctrl+Enter or Cmd+Enter to send to Obsidian)"></textarea>
+
+    <div class="footer">
+      <span>Obsidian vault: <strong>Obsidian.md</strong> &rarr; folder: <strong>adhd</strong></span>
+      <button id="send-btn">Send to Obsidian</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
