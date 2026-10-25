@@ -4,6 +4,8 @@ import SwiftUI
 /// Shared dimensions for the notch surface and its content.
 enum NotchLayoutMetrics {
     static let compactSize = CGSize(width: 220, height: 38)
+    static let compactPlayingWidth: CGFloat = 310
+    static let compactContentHorizontalPadding: CGFloat = 13
     static let expandedWidth: CGFloat = 420
     static let expandedPanelWidth: CGFloat = 460
     static let contentPadding: CGFloat = 16

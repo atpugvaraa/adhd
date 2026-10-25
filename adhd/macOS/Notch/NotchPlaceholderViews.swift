@@ -1,17 +1,6 @@
 import SwiftUI
 import HotSwiftUI
 
-struct NotchHomeView: View {
-    @ObserveInjection private var redraw
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            
-        }
-        .enableInjection()
-    }
-}
-
 struct NotchShelfView: View {
     @ObservedObject var store: FileShelfStore
     let isDropTargeted: Bool

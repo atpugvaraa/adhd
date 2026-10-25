@@ -11,42 +11,70 @@ struct NotchSurfaceView: View {
     @State private var searchQuery = ""
     @State private var isDropTargeted = false
     @FocusState private var searchFieldFocused: Bool
+    @Namespace private var nowPlayingArtworkNamespace
     @ObserveInjection private var redraw
     @StateObject private var shelfStore = FileShelfStore.shared
     @StateObject private var searchModel = UniversalSearchModel()
+    @State private var nowPlaying = NowPlayingStore.shared
 
     var body: some View {
-        expandedContent
-            .fixedSize(horizontal: false, vertical: true)
-            // .layoutDebugBackground(.orange, named: "content natural")
-            .frame(
-                width: isExpanded ? NotchLayoutMetrics.expandedWidth : NotchLayoutMetrics.compactSize.width,
-                height: isExpanded ? nil : NotchLayoutMetrics.compactSize.height,
-                alignment: .top
-            )
-            // .layoutDebugBackground(.blue, named: "content frame")
-            .opacity(isExpanded ? 1 : 0)
-            .scaleEffect(isExpanded ? 1 : 0.96, anchor: .top)
-            .allowsHitTesting(isExpanded)
-            .accessibilityHidden(!isExpanded)
-            .background { surface }
-            .clipShape(NotchShape(
-                topRadius: NotchLayoutMetrics.topCornerRadius,
-                bottomRadius: isExpanded
-                    ? NotchLayoutMetrics.expandedBottomRadius
-                    : NotchLayoutMetrics.compactBottomRadius
-            ))
-            .contentShape(Rectangle())
-            .onHover(perform: handleHover)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            // .layoutDebugBackground(.purple, named: "panel hosted view")
-            .notchLayoutDiagnostics(isExpanded: isExpanded)
-            .animation(.interactiveSpring(response: 0.38, dampingFraction: 0.82), value: isExpanded)
-            .onChange(of: searchQuery) { _, query in
-                inferRoute(from: query)
+        ZStack(alignment: .top) {
+            if isExpanded {
+                expandedContent
+            } else if let item = compactNowPlayingItem {
+                NotchCompactNowPlayingView(
+                    item: item,
+                    artworkNamespace: nowPlayingArtworkNamespace
+                )
             }
-            .onDisappear { collapseTask?.cancel() }
-            .enableInjection()
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        // .layoutDebugBackground(.orange, named: "content natural")
+        .frame(
+            width: surfaceWidth,
+            height: isExpanded ? nil : NotchLayoutMetrics.compactSize.height,
+            alignment: .top
+        )
+        .layoutDebugBackground(.blue, named: "notch surface frame")
+        .allowsHitTesting(isExpanded)
+        .accessibilityHidden(!isExpanded)
+        .background { surface }
+        .clipShape(NotchShape(
+            topRadius: NotchLayoutMetrics.topCornerRadius,
+            bottomRadius: isExpanded
+                ? NotchLayoutMetrics.expandedBottomRadius
+                : NotchLayoutMetrics.compactBottomRadius
+        ))
+        .contentShape(Rectangle())
+        .onHover(perform: handleHover)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // .layoutDebugBackground(.purple, named: "panel hosted view")
+        .notchLayoutDiagnostics(isExpanded: isExpanded)
+        .animation(.interactiveSpring(response: 0.38, dampingFraction: 0.82), value: isExpanded)
+        .animation(.bouncy, value: nowPlaying.item?.isPlaying)
+        .onChange(of: searchQuery) { _, query in
+            inferRoute(from: query)
+        }
+        .onDisappear { collapseTask?.cancel() }
+        .enableInjection()
+    }
+
+    private var compactNowPlayingItem: NowPlayingItem? {
+        guard
+            !isExpanded,
+            route == .home,
+            searchQuery.isEmpty,
+            let item = nowPlaying.item,
+            item.isPlaying
+        else { return nil }
+        return item
+    }
+
+    private var surfaceWidth: CGFloat {
+        guard !isExpanded else { return NotchLayoutMetrics.expandedWidth }
+        return compactNowPlayingItem == nil
+            ? NotchLayoutMetrics.compactSize.width
+            : NotchLayoutMetrics.compactPlayingWidth
     }
 
     private var surface: some View {
@@ -78,7 +106,10 @@ struct NotchSurfaceView: View {
                 } else if !searchQuery.isEmpty {
                     NotchSearchResultsView(model: searchModel)
                 } else {
-                    NotchHomeView()
+                    NotchHomeView(
+                        artworkNamespace: nowPlayingArtworkNamespace,
+                        isExpanded: isExpanded
+                    )
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
