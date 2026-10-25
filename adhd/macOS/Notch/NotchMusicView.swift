@@ -41,12 +41,12 @@ struct NotchCompactNowPlayingView: View {
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.78))
                     .matchedGeometryEffect(id: "now-playing-remaining-time", in: artworkNamespace)
-                    .layoutDebugBackground(.yellow, named: "compact remaining-time")
+                    // .layoutDebugBackground(.yellow, named: "compact remaining-time")
             }
-            .layoutDebugBackground(.orange, named: "compact content before inset")
+            // .layoutDebugBackground(.orange, named: "compact content before inset")
             .padding(.horizontal, NotchLayoutMetrics.compactContentHorizontalPadding)
             .frame(width: NotchLayoutMetrics.compactPlayingWidth, height: NotchLayoutMetrics.compactSize.height)
-            .layoutDebugBackground(.green, named: "compact player frame")
+            // .layoutDebugBackground(.green, named: "compact player frame")
         }
         .foregroundStyle(.white)
         .enableInjection()
@@ -71,7 +71,7 @@ struct NotchCompactNowPlayingView: View {
         .frame(width: 25, height: 25)
         .clipShape(RoundedRectangle(cornerRadius: 5))
         .matchedGeometryEffect(id: "now-playing-artwork", in: artworkNamespace)
-        .layoutDebugBackground(.pink, named: "compact artwork")
+        // .layoutDebugBackground(.pink, named: "compact artwork")
     }
 }
 

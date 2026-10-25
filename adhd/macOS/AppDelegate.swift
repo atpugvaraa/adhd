@@ -10,6 +10,7 @@ Learning goal: Learn the AppKit delegate lifecycle and object ownership.
 
 #if os(macOS)
 import AppKit
+import Carbon.HIToolbox
 import SwiftUI
 
 /// A nonactivating notch panel may become key for text input, without becoming a main window.
@@ -22,8 +23,10 @@ private final class NotchPanel: NSPanel {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem?
     private var workspaceWindowController: NSWindowController?
-    
     private var notchPanel: NSPanel?
+    private let notchInteraction = NotchInteractionModel()
+    private var searchHotKey: EventHotKeyRef?
+    private var hotKeyEventHandler: EventHandlerRef?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureMenuBarItem()
@@ -61,13 +64,89 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces]
         panel.becomesKeyOnlyIfNeeded = true
-        
-        let notchSurface = NSHostingView(rootView: NotchSurfaceView())
+
+        notchInteraction.onFocusRequested = { [weak panel] in
+            panel?.makeKey()
+        }
+
+        let notchSurface = NSHostingView(rootView: NotchSurfaceView(interaction: notchInteraction))
         notchSurface.frame = NSRect(origin: .zero, size: panelSize)
         panel.contentView = notchSurface
         
         notchPanel = panel
         panel.orderFrontRegardless()
+        registerSearchHotKey()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        if let searchHotKey {
+            UnregisterEventHotKey(searchHotKey)
+            self.searchHotKey = nil
+        }
+        if let hotKeyEventHandler {
+            RemoveEventHandler(hotKeyEventHandler)
+            self.hotKeyEventHandler = nil
+        }
+    }
+
+    private func registerSearchHotKey() {
+        var eventType = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: OSType(kEventHotKeyPressed)
+        )
+        let handlerStatus = InstallEventHandler(
+            GetApplicationEventTarget(),
+            { _, _, userData in
+                guard let userData else { return 0 }
+                let delegate = Unmanaged<AppDelegate>
+                    .fromOpaque(userData)
+                    .takeUnretainedValue()
+                DispatchQueue.main.async {
+                    delegate.toggleSearchFromHotKey()
+                }
+                return 0
+            },
+            1,
+            &eventType,
+            Unmanaged.passUnretained(self).toOpaque(),
+            &hotKeyEventHandler
+        )
+
+        guard handlerStatus == 0 else {
+            PerfLog.warning("Could not install the ⌘Space event handler (status \(handlerStatus))")
+            return
+        }
+
+        var hotKeyID = EventHotKeyID()
+        hotKeyID.signature = 0x61646864 // "adhd"
+        hotKeyID.id = 1
+
+        let registrationStatus = RegisterEventHotKey(
+            UInt32(kVK_Space),
+            UInt32(cmdKey),
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &searchHotKey
+        )
+
+        guard registrationStatus == 0 else {
+            PerfLog.warning("Could not register ⌘Space (status \(registrationStatus)); it may be reserved by Spotlight")
+            if let hotKeyEventHandler {
+                RemoveEventHandler(hotKeyEventHandler)
+                self.hotKeyEventHandler = nil
+            }
+            return
+        }
+
+        PerfLog.info("Registered ⌘Space to focus notch search")
+    }
+
+    private func toggleSearchFromHotKey() {
+        guard let notchPanel else { return }
+        notchPanel.orderFrontRegardless()
+        NSApp.activate(ignoringOtherApps: true)
+        notchInteraction.toggleFromHotKey()
     }
 
     private func configureMenuBarItem() {

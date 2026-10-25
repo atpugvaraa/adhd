@@ -4,9 +4,28 @@ import SwiftUI
 import HotSwiftUI
 import UniformTypeIdentifiers
 
+
+@MainActor @Observable
+final class NotchInteractionModel {
+    private(set) var hotKeyRequest = 0
+    var onFocusRequested: (() -> Void)?
+
+    func requestFocus() {
+        onFocusRequested?()
+    }
+
+    func toggleFromHotKey() {
+        onFocusRequested?()
+        hotKeyRequest += 1
+    }
+}
+
 struct NotchSurfaceView: View {
+    @State var interaction: NotchInteractionModel
     @State private var route: NotchRoute = .home
     @State private var isExpanded = false
+    @State private var isHoveringNotch = false
+    @State private var isPresentedByHotKey = false
     @State private var collapseTask: Task<Void, Never>?
     @State private var searchQuery = ""
     @State private var isDropTargeted = false
@@ -35,7 +54,7 @@ struct NotchSurfaceView: View {
             height: isExpanded ? nil : NotchLayoutMetrics.compactSize.height,
             alignment: .top
         )
-        .layoutDebugBackground(.blue, named: "notch surface frame")
+        // .layoutDebugBackground(.blue, named: "notch surface frame")
         .allowsHitTesting(isExpanded)
         .accessibilityHidden(!isExpanded)
         .background { surface }
@@ -54,6 +73,12 @@ struct NotchSurfaceView: View {
         .animation(.bouncy, value: nowPlaying.item?.isPlaying)
         .onChange(of: searchQuery) { _, query in
             inferRoute(from: query)
+        }
+        .onChange(of: interaction.hotKeyRequest) { _, _ in
+            handleHotKeyToggle()
+        }
+        .onChange(of: searchModel.completedActionCount) { _, _ in
+            resetAfterSearchAction()
         }
         .onDisappear { collapseTask?.cancel() }
         .enableInjection()
@@ -122,7 +147,8 @@ struct NotchSurfaceView: View {
             NotchSearchBar(
                 query: $searchQuery,
                 isFocused: $searchFieldFocused,
-                onSubmit: { searchModel.submit(query: searchQuery) }
+                onSubmit: { searchModel.submit(query: searchQuery) },
+                onMoveSelection: searchModel.moveSelection(by:)
             )
         }
         // .layoutDebugBackground(.red, named: "content stack")
@@ -139,24 +165,69 @@ struct NotchSurfaceView: View {
     }
 
     private func handleHover(_ hovering: Bool) {
+        isHoveringNotch = hovering
         collapseTask?.cancel()
         collapseTask = nil
 
         if hovering {
-            guard !isExpanded else { return }
-            withAnimation(.interactiveSpring(response: 0.38, dampingFraction: 0.82)) {
-                isExpanded = true
-            }
+            PerfLog.mark("notch-search-focus-hover")
+            interaction.requestFocus()
+            searchFieldFocused = true
+            expand()
         } else {
+            guard !isPresentedByHotKey else { return }
             guard isExpanded else { return }
             collapseTask = Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(100))
-                guard !Task.isCancelled else { return }
-                withAnimation(.interactiveSpring(response: 0.38, dampingFraction: 0.82)) {
-                    isExpanded = false
-                }
+                guard !Task.isCancelled, !isHoveringNotch, !isPresentedByHotKey else { return }
+                collapse()
             }
         }
+    }
+
+    private func handleHotKeyToggle() {
+        if isPresentedByHotKey {
+            PerfLog.mark("notch-search-dismiss-hotkey")
+            isPresentedByHotKey = false
+            if isHoveringNotch {
+                interaction.requestFocus()
+                searchFieldFocused = true
+                expand()
+            } else {
+                searchFieldFocused = false
+                collapse()
+            }
+        } else {
+            PerfLog.mark("notch-search-focus-hotkey")
+            isPresentedByHotKey = true
+            interaction.requestFocus()
+            searchFieldFocused = true
+            expand()
+        }
+    }
+
+    private func expand() {
+        guard !isExpanded else { return }
+        withAnimation(.interactiveSpring(response: 0.38, dampingFraction: 0.82)) {
+            isExpanded = true
+        }
+    }
+
+    private func collapse() {
+        withAnimation(.interactiveSpring(response: 0.38, dampingFraction: 0.82)) {
+            isExpanded = false
+        }
+        searchFieldFocused = false
+    }
+
+    private func resetAfterSearchAction() {
+        collapseTask?.cancel()
+        collapseTask = nil
+        isPresentedByHotKey = false
+        searchQuery = ""
+        route = .home
+        searchFieldFocused = false
+        collapse()
     }
 
 }
@@ -179,34 +250,57 @@ private struct NotchSearchResultsView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.55))
             } else {
-                ForEach(model.results) { result in
-                    Button {
-                        model.perform(result)
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: result.symbol)
-                                .frame(width: 16)
-                                .foregroundStyle(.white.opacity(0.65))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(result.title)
-                                    .font(.system(size: 12, weight: .medium))
-                                    .lineLimit(1)
-                                Text(result.detail)
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.white.opacity(0.5))
-                            }
-                            Spacer(minLength: 0)
-                            if case .launch(let url) = result.action {
-                                Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
-                                    .resizable()
-                                    .frame(width: 20, height: 20)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(model.results.indices, id: \.self) { index in
+                                let result = model.results[index]
+                                Button {
+                                    model.perform(result)
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: result.symbol)
+                                            .frame(width: 16)
+                                            .foregroundStyle(.white.opacity(0.65))
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(result.title)
+                                                .font(.system(size: 12, weight: .medium))
+                                                .lineLimit(1)
+                                            Text(result.detail)
+                                                .font(.system(size: 10))
+                                                .foregroundStyle(.white.opacity(0.5))
+                                        }
+                                        Spacer(minLength: 0)
+                                        if case .launch(let url) = result.action {
+                                            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                                                .resizable()
+                                                .frame(width: 20, height: 20)
+                                        }
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .frame(height: NotchLayoutMetrics.searchResultRowHeight)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(index == model.selectedIndex ? .white.opacity(0.12) : .clear)
+                                    )
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .id(index)
                             }
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .scrollIndicators(.hidden)
+                    .frame(height: min(
+                        CGFloat(model.results.count) * NotchLayoutMetrics.searchResultRowHeight,
+                        NotchLayoutMetrics.searchResultsViewportHeight
+                    ))
+                    .onChange(of: model.selectedIndex) { _, selectedIndex in
+                        withAnimation(.easeOut(duration: 0.12)) {
+                            proxy.scrollTo(selectedIndex, anchor: .center)
+                        }
+                    }
+                    // .layoutDebugBackground(.yellow, named: "search results viewport")
                 }
             }
         }
